@@ -1108,8 +1108,13 @@ Card : Dict {
 ### Vocabulary
 
 An enum spec is exported as a class, and the slot using it is exported as an
-RDF property. Enum values are strings rather than RDF individuals, so the
-vocabulary graph does not create a resource for each entry.
+RDF property. Ordinary enum values are strings rather than RDF individuals,
+so the vocabulary graph does not create a resource for each entry.
+
+Some built-in enums have their own RDF mappings instead of this default string
+mapping. For example, `Unit` and
+[UnitQuantity](#standalone-unitquantity-values) represent their values as
+resources, as described in their respective sections.
 
 ```turtle
 ex:Suit a sys:Class, rdfs:Class ;
@@ -1122,7 +1127,7 @@ ex:Card.suit a rdf:Property ;
 
 ### SHACL Validation
 
-Enum slots are string-valued and use `sh:in` for the allowed values. For the
+Ordinary enum slots are string-valued and use `sh:in` for the allowed values. For the
 unkeyed `Suit` above, the entry names are used directly:
 
 ```turtle
@@ -1913,6 +1918,56 @@ The QUDT declarations and quantity-kind facts referenced by these values are
 loaded separately during validation as described under
 [Metadata and External Vocabularies](#metadata-and-external-vocabularies).
 
+## Standalone UnitQuantity Values
+
+A standalone `UnitQuantity` value maps to `sys:UnitQuantity.<key>`, using the
+exact, case-sensitive enum key and the versioned `sys` namespace. One Xeto
+quantity can correspond to several QUDT quantity kinds, or have no QUDT match.
+Giving it its own resource preserves one Xeto value without choosing a single
+QUDT match or turning it into several values.
+
+```xeto
+Reading : Dict {
+  quantity: UnitQuantity
+}
+
+@reading1: Reading { quantity: "energy" }
+```
+
+```turtle
+ex:reading1 a sys:Entity, ex:Reading ;
+  ex:Reading.quantity sys:UnitQuantity.energy .
+
+sys:UnitQuantity.energy a sys:UnitQuantity ;
+  rdfs:label "energy"@en ;
+  rdfs:seeAlso quantitykind:Energy, quantitykind:MomentOfForce,
+    quantitykind:Torque .
+```
+
+The schema exports the catalog's quantity resources with labels and
+`rdfs:seeAlso` links to their reviewed QUDT matches. These links do not assert
+equivalence. A quantity with no match, such as `powerByVolumetricFlow`, still
+has its own resource, with no QUDT links.
+
+The required slot above has this property shape (the `sh:in` list is abbreviated;
+the full list contains every effective `sys::UnitQuantity` enum entry):
+
+```turtle
+ex:Reading a sh:NodeShape ;
+  sh:targetClass ex:Reading ;
+  sh:property [
+  sh:path ex:Reading.quantity ;
+  sh:nodeKind sh:IRI ;
+  sh:in (sys:UnitQuantity.energy sys:UnitQuantity.temperature # ...
+  ) ;
+  sh:minCount 1 ;
+  sh:maxCount 1
+] .
+```
+
+An optional slot omits `sh:minCount`. An invariant adds, for example,
+`sh:hasValue sys:UnitQuantity.energy`.
+
 ## Queries
 
 ### SHACL Validation
@@ -2508,8 +2563,6 @@ define error codes or prescribe programming-language error types.
 - Built-in scalar types not listed in the scalar datatype table, including
   `None`, `NA`, `Duration`, `Version`, `Buf`, `Span`, `Filter`, and
   `BuildVar`, pending explicit RDF datatype and lexical-form mappings.
-- `UnitQuantity` values. Quantity metadata on `Unit` and `Number` slots remains
-  supported as defined in [Units and Quantities](#units-and-quantities).
 - `Grid` and the abstract `Collection` type, pending a complete collection and
   table mapping.
 - `Func`, `Interface`, and `Funcs`, whose API and execution semantics are
